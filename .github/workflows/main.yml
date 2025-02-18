@@ -1,0 +1,27 @@
+name: Build Firmware
+
+on:
+  pull_request:
+    branches: [main]
+    types: [closed]
+
+jobs:
+  build:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Build Firmware
+      run: |
+        # Comandos para compilar el firmware y generar los binarios
+        arduino-cli compile --fqbn esp32:esp32:esp32 src/embedded/test/SendToGrafana/SendToGrafana.ino
+        
+    - name: Create Release
+      uses: ncipollo/release-action@v1
+      with:
+        artifacts: "binarios/*"
+        tag: ${{ github.ref }}
+        name: Release ${{ github.ref }}
+        body: "Binarios de firmware generados automáticamente"
