@@ -12,7 +12,15 @@ jobs:
     
     steps:
     - uses: actions/checkout@v2
-    
+    - name: Install Arduino CLI
+      run: |
+        curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+        echo "$HOME/bin" >> $GITHUB_PATH  
+    - name: Setup Arduino CLI
+      run: |
+        arduino-cli core update-index
+        arduino-cli core install esp32:esp32
+        arduino-cli lib install "httpclient"  
     - name: Build Firmware
       run: |
         # Comandos para compilar el firmware y generar los binarios
