@@ -3,8 +3,8 @@
 #include <Adafruit_SCD30.h>
 #include <time.h>
 
-const char* ssid = "ChinaNet-POLLO2_0";
-const char* password = "1234554321";
+const char* ssid = "OpenWrt";
+const char* password = "";
 
 const char* token_grafana = "token:e98697797a6a592e6c886277041e6b95";
 const char* url = "http://grafana.altermundi.net:8086/write?db=cto";
