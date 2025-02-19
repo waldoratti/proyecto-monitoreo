@@ -2,24 +2,22 @@
 #include <HTTPClient.h>
 #include <Adafruit_SCD30.h>
 #include <time.h>
+#include <WiFiManager.h>  // New include for WiFi Manager
+#include <HTTPUpdate.h>   // New include for HTTP Update
 
-const char* ssid = "OpenWrt";
-const char* password = "";
-
-const char* token_grafana = "token:e98697797a6a592e6c886277041e6b95";
 const char* url = "http://grafana.altermundi.net:8086/write?db=cto";
 const char* INICIALES = "ASC02";
 
 Adafruit_SCD30 scd30;
 
+WiFiManager wifiManager; // New WiFi Manager instance
+
 void setup() {
   Serial.begin(115200);
+
+  // WiFi Manager configuration
+  wifiManager.autoConnect("ESP32-AP"); // Create an AP with this SSID if no configuration
   
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.println("Conectando a WiFi...");
-  }
   Serial.println("Conectado a WiFi");
 
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
@@ -31,6 +29,22 @@ void setup() {
 }
 
 void loop() {
+  // Check for OTA updates
+  t_httpUpdate_return ret = httpUpdate.update("https://github.com/AlterMundi-MonitoreoyControl/proyecto-monitoreo/releases/download/release-11/SendToGrafana.ino.bin");
+  switch(ret) {
+    case HTTP_UPDATE_FAILED:
+      Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
+      break;
+
+    case HTTP_UPDATE_NO_UPDATES:
+      Serial.println("HTTP_UPDATE_NO_UPDATES");
+      break;
+
+    case HTTP_UPDATE_OK:
+      Serial.println("HTTP_UPDATE_OK");
+      break;
+  }
+
   if (scd30.dataReady()) {
     if (!scd30.read()) {
       Serial.println("Error leyendo el sensor!");
@@ -77,7 +91,5 @@ void send_data_grafana(float temperature, float humidity, float co2) {
     http.end();
   } else {
     Serial.println("Error en la conexión WiFi");
-
-    
   }
 }
