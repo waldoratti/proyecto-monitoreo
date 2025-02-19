@@ -5,6 +5,9 @@ on:
     branches: [main]
     types: [closed]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     if: github.event.pull_request.merged == true
@@ -13,9 +16,6 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - name: Add Arduino CLI to PATH
-      run: echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
-  
     - name: Install Arduino CLI
       run: |
         curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
@@ -35,8 +35,8 @@ jobs:
 
     - name: Build Firmware
       run: |
-        arduino-cli compile --fqbn esp32:esp32:esp32 --libraries /home/runner/.arduino15/packages/esp32/hardware/esp32/3.1.1 src/embedded/test/SendToGrafana/SendToGrafana.ino
-        
+        arduino-cli compile --fqbn esp32:esp32:esp32 src/embedded/test/SendToGrafana/SendToGrafana.ino
+
     - name: Create Release
       uses: ncipollo/release-action@v1
       with:
@@ -44,3 +44,4 @@ jobs:
         tag: ${{ github.ref }}
         name: Release ${{ github.ref }}
         body: "Binarios de firmware generados automáticamente"
+        token: ${{ secrets.GITHUB_TOKEN }}
