@@ -15,7 +15,9 @@ jobs:
     
     steps:
     - uses: actions/checkout@v2
-
+    - name: Add Arduino CLI to PATH
+      run: echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
+      
     - name: Install Arduino CLI
       run: |
         curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
