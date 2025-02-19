@@ -34,6 +34,8 @@ jobs:
       run: |
         arduino-cli lib install "HTTPClient"
         arduino-cli lib install "Adafruit SCD30"
+        arduino-cli lib install "tzapu/WiFiManager"
+        arduino-cli lib install "ArduinoHttpClient/HTTPUpdate"
 
     - name: Build Firmware
       run: |
