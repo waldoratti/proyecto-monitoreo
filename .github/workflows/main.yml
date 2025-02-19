@@ -31,6 +31,7 @@ jobs:
     - name: Install Required Libraries
       run: |
         arduino-cli lib install "HTTPClient"
+        arduino-cli lib install "Adafruit SCD30"
 
     - name: Build Firmware
       run: |
