@@ -12,12 +12,17 @@ jobs:
     
     steps:
     - uses: actions/checkout@v2
-    
+
+    - name: Setup Arduino CLI
+      run: |
+        arduino-cli core update-index
+        arduino-cli core install esp32:esp32
+        arduino-cli lib install "WiFi"
+
     - name: Build Firmware
       run: |
-        # Comandos para compilar el firmware y generar los binarios
         arduino-cli compile --fqbn esp32:esp32:esp32 src/embedded/test/SendToGrafana/SendToGrafana.ino
-        
+
     - name: Create Release
       uses: ncipollo/release-action@v1
       with:
