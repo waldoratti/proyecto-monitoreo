@@ -77,5 +77,6 @@ void send_data_grafana(float temperature, float humidity, float co2) {
     http.end();
   } else {
     Serial.println("Error en la conexión WiFi");
+    
   }
 }
