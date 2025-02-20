@@ -4,9 +4,14 @@
 #include <time.h>
 #include <WiFiManager.h>  // New include for WiFi Manager
 #include <HTTPUpdate.h>  // New include for HTTP Update
+#include <WiFiClientSecure.h>  // Ensure this is included
 
 const char* url = "http://grafana.altermundi.net:8086/write?db=cto";
 const char* INICIALES = "ASC02";
+const char* token_grafana = "token:e98697797a6a592e6c886277041e6b95";
+const char* FIRMWARE_VERSION = "1.0.0";  // Set this to the current version
+const char* UPDATE_URL = "http://192.168.0.106:8080/version.txt";  // URL with the latest version info
+const char* FIRMWARE_BIN_URL = "http://192.168.0.106:8080/bins/SendToGrafana.ino.bin";
 
 Adafruit_SCD30 scd30;
 
@@ -24,7 +29,7 @@ void setup() {
 
   if (!scd30.begin()) {
     Serial.println("No se pudo inicializar el sensor SCD30!");
-    while (1) { delay(10); }
+    //while (1) { delay(10); }
   }
 }
 
@@ -44,34 +49,61 @@ void update_error(int err) {
   Serial.printf("CALLBACK:  HTTP update fatal error code %d\n", err);
 }
 
-void loop() {
-  // Check for OTA updates
-  NetworkClient client;
+
+void checkForUpdates() {
+  WiFiClient client;
+  HTTPClient http;
+
+  Serial.println("Checking for firmware updates...");
   
-  // The line below is optional. It can be used to blink the LED on the board during flashing
-  // The LED will be on during download of one buffer of data from the network. The LED will
-  // be off during writing that buffer to flash
-  // On a good connection the LED should flash regularly. On a bad connection the LED will be
-  // on much longer than it will be off. Other pins than LED_BUILTIN may be used. The second
-  // value is used to put the LED on. If the LED is on with HIGH, that value should be passed
-  // httpUpdate.setLedPin(LED_BUILTIN, LOW);
-  
-  httpUpdate.onStart(update_started);
-  httpUpdate.onEnd(update_finished);
-  httpUpdate.onProgress(update_progress);
-  httpUpdate.onError(update_error);
-  
-  t_httpUpdate_return ret = httpUpdate.update(client, "https://github.com/AlterMundi-MonitoreoyControl/proyecto-monitoreo/releases/download/release-11/SendToGrafana.ino.bin");
-  // Or:
-  //t_httpUpdate_return ret = httpUpdate.update(client, "server", 80, "/file.bin");
-  
-  switch (ret) {
-    case HTTP_UPDATE_FAILED: Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str()); break;
-  
-    case HTTP_UPDATE_NO_UPDATES: Serial.println("HTTP_UPDATE_NO_UPDATES"); break;
-  
-    case HTTP_UPDATE_OK: Serial.println("HTTP_UPDATE_OK"); break;
+  if (http.begin(client, UPDATE_URL)) {  
+      int httpCode = http.GET();
+
+      if (httpCode == HTTP_CODE_OK) { 
+          String latestVersion = http.getString();
+          latestVersion.trim();
+
+          Serial.printf("Current version: %s, Available version: %s\n", FIRMWARE_VERSION, latestVersion.c_str());
+
+          if (latestVersion != FIRMWARE_VERSION) {
+              Serial.println("New firmware available! Updating...");
+              
+              httpUpdate.onStart(update_started);
+              httpUpdate.onEnd(update_finished);
+              httpUpdate.onProgress(update_progress);
+              httpUpdate.onError(update_error);
+
+              t_httpUpdate_return ret = httpUpdate.update(client, FIRMWARE_BIN_URL);
+
+              if (ret == HTTP_UPDATE_OK) {
+                  Serial.println("Update successful!");
+              } else {
+                  Serial.printf("Update failed: %d\n", httpUpdate.getLastError());
+              }
+          } else {
+              Serial.println("Firmware is up to date. Skipping update.");
+          }
+      } else {
+          Serial.printf("Failed to check update: HTTP error %d\n", httpCode);
+      }
+      http.end();
   }
+}
+
+
+void loop() {
+  
+  //static unsigned long lastCheck = 0;
+  //const unsigned long updateInterval = 24*3600000;  // Check every day
+
+//  if (millis() - lastCheck > updateInterval) {
+//      lastCheck = millis();
+      checkForUpdates();
+//  }
+  
+  float temperature = 99;
+  float humidity = 100;
+  float co2 = 999999;
 
   if (scd30.dataReady()) {
     if (!scd30.read()) {
@@ -82,10 +114,10 @@ void loop() {
     float temperature = scd30.temperature;
     float humidity = scd30.relative_humidity;
     float co2 = scd30.CO2;
-
-    send_data_grafana(temperature, humidity, co2);
   }
-
+  Serial.printf("Free heap before send_data_grafana: %d bytes\n", ESP.getFreeHeap());
+  send_data_grafana(temperature, humidity, co2);
+  Serial.printf("Free heap AFTER  send_data_grafana: %d bytes\n", ESP.getFreeHeap());
   delay(10000); // Esperar 10 segundos antes de la próxima lectura
 }
 
@@ -100,6 +132,7 @@ void send_data_grafana(float temperature, float humidity, float co2) {
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
     WiFiClient client;
+   //client.setInsecure(); // Disable SSL certificate verification (if using HTTPS)
 
     String data = create_grafana_message(temperature, humidity, co2);
 
