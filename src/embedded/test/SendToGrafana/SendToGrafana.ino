@@ -3,7 +3,7 @@
 #include <Adafruit_SCD30.h>
 #include <time.h>
 #include <WiFiManager.h>  // New include for WiFi Manager
-#include <ESP32HTTPUpdate.h>  // New include for HTTP Update
+#include <HTTPUpdate.h>  // New include for HTTP Update
 
 const char* url = "http://grafana.altermundi.net:8086/write?db=cto";
 const char* INICIALES = "ASC02";
