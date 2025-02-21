@@ -85,10 +85,7 @@ void checkForUpdates() {
       // Create the HTTP client to follow redirects
       HTTPClient redirectHttp;
       redirectHttp.begin(clientSecure, firmwareURL);  // Start the initial request
-
-      // Enable strict redirect following
-      //redirectHttp.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-      
+    
       const char *headerKeys[] = {"Location"};
       const size_t headerKeysCount = sizeof(headerKeys) / sizeof(headerKeys[0]);
       redirectHttp.collectHeaders(headerKeys, headerKeysCount);
