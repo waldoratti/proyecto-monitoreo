@@ -51,7 +51,7 @@ jobs:
       uses: ncipollo/release-action@v1
       with:
         artifacts: "binarios/*"
-        tag: "v${{ steps.get_version.outputs.version }}" # Use the step output
+        tag: "${{ steps.get_version.outputs.version }}" # Use the step output
         name: Release v${{ steps.get_version.outputs.version }} # Use the step output
         body: "Binarios de firmware generados automáticamente"
         token: ${{ secrets.GITHUB_TOKEN }}
