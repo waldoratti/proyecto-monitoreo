@@ -16,7 +16,9 @@ arduino-cli core install esp32:esp32
 arduino-cli lib install "WiFiManager"
 arduino-cli lib install "HTTPClient"
 arduino-cli lib install "Adafruit SCD30"
+arduino-cli lib install "ArduinoJson"
 
 # Compile and upload firmware
-arduino-cli compile --fqbn esp32:esp32:esp32 SendToGrafana.ino --build-path ./bins
-arduino-cli upload -p /dev/ttyUSB0 --fqbn esp32:esp32:esp32 --input-dir ./bins
+#
+# arduino-cli compile --fqbn esp32:esp32:esp32 SendToGrafana.ino --build-path ./bins
+# arduino-cli upload -p /dev/ttyUSB0 --fqbn esp32:esp32:esp32 --input-dir ./bins

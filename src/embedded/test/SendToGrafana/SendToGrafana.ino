@@ -2,16 +2,15 @@
 #include <HTTPClient.h>
 #include <Adafruit_SCD30.h>
 #include <time.h>
-#include <WiFiManager.h>  // New include for WiFi Manager
-#include <HTTPUpdate.h>  // New include for HTTP Update
-#include <WiFiClientSecure.h>  // Ensure this is included
+#include <WiFiManager.h> 
+#include <HTTPUpdate.h>  
+#include <WiFiClientSecure.h>  
 #include <esp_ota_ops.h>
-#include <ArduinoJson.h> // Make sure you install the ArduinoJson library
+#include "version.h"
 
 const char* url = "http://grafana.altermundi.net:8086/write?db=cto";
 const char* INICIALES = "ASC02";
 const char* token_grafana = "token:e98697797a6a592e6c886277041e6b95";
-const char* FIRMWARE_VERSION = "1.0.0";  // Set this to the current version
 const char* UPDATE_URL = "http://192.168.0.106:8080/version.txt";  // URL with the latest version info
 const char* FIRMWARE_BIN_URL = "http://192.168.0.106:8080/bins/SendToGrafana.ino.bin";
 const char* YOUR_GITHUB_USERNAME = "AlterMundi-MonitoreoyControl";
@@ -110,9 +109,7 @@ void checkForUpdates() {
   HTTPClient http;
   HTTPUpdate httpUpdate;  // Declare the HTTPUpdate instance
   String latestTag = getLatestReleaseTag("AlterMundi-MonitoreoyControl","proyecto-monitoreo"); // Replace with your repo details  Serial.println("Checking for firmware updates...");
-  
-
-
+  Serial.printf("Current version: %s, Available version: %s\n", FIRMWARE_VERSION, latestTag.c_str());
   if (http.begin(client, UPDATE_URL)) {  
       int httpCode = http.GET();
 
@@ -120,9 +117,9 @@ void checkForUpdates() {
           String latestVersion = http.getString();
           latestVersion.trim();
 
-          Serial.printf("Current version: %s, Available version: %s\n", FIRMWARE_VERSION, latestVersion.c_str());
+          Serial.printf("Current version: %s, Available version: %s\n", FIRMWARE_VERSION, latestTag.c_str());
 
-          if (latestVersion != FIRMWARE_VERSION) {
+          if (latestTag != FIRMWARE_VERSION) {
               // Get the currently running partition
               const esp_partition_t* running_partition = esp_ota_get_running_partition();
               Serial.printf("Running partition:\n");
@@ -146,7 +143,7 @@ void checkForUpdates() {
               t_httpUpdate_return ret = httpUpdate.update(client, firmwareURL);
 
               if (ret == HTTP_UPDATE_OK) {
-                  Serial.println("Update successful!");
+                  Serial.println("Update successful!"); //it never reaches this point ? 
                   esp_ota_set_boot_partition(update_partition);
               } else {
                   Serial.printf("Update failed: %d\n", httpUpdate.getLastError());
