@@ -7,12 +7,10 @@
 #include <WiFiClientSecure.h>  
 #include <esp_ota_ops.h>
 #include "version.h"
-#include <ArduinoJson.h>
 
 const char* url = "http://grafana.altermundi.net:8086/write?db=cto";
 const char* INICIALES = "ASC02";
 const char* token_grafana = "token:e98697797a6a592e6c886277041e6b95";
-const char* UPDATE_URL = "http://192.168.0.106:8080/version.txt";  
 const char* FIRMWARE_BIN_URL = "http://192.168.0.106:8080/bins/SendToGrafana.ino.bin";
 const char* YOUR_GITHUB_USERNAME = "AlterMundi-MonitoreoyControl";
 const char* YOUR_REPO_NAME = "proyecto-monitoreo";
@@ -67,31 +65,53 @@ String getLatestReleaseTag(const char* repoOwner, const char* repoName) {
   }
   return "";
 }
-
-
 void checkForUpdates() {
-  HTTPClient http;
   String latestTag = getLatestReleaseTag(YOUR_GITHUB_USERNAME, YOUR_REPO_NAME);
   Serial.printf("Current version: %s, Available version: %s\n", FIRMWARE_VERSION, latestTag.c_str());
 
-  if (http.begin(clientSecure, UPDATE_URL)) {
-    int httpCode = http.GET();
+  if (latestTag != "") {
+    if (latestTag != FIRMWARE_VERSION) {
+      const esp_partition_t* update_partition = esp_ota_get_next_update_partition(NULL);
+      HTTPUpdate httpUpdate;
 
-    if (httpCode == HTTP_CODE_OK) { 
-      String latestVersion = http.getString();
-      latestVersion.trim();
-      http.end(); 
+      httpUpdate.onStart([](){ Serial.println("Update started..."); });
+      httpUpdate.onEnd([](){ Serial.println("Update finished!"); });
+      httpUpdate.onProgress([](int cur, int total) { Serial.printf("Update progress: %d/%d\n", cur, total); });
+      httpUpdate.onError([](int err) { Serial.printf("Update error: %d\n", err); });
 
-      if (latestTag != FIRMWARE_VERSION) {
-        const esp_partition_t* update_partition = esp_ota_get_next_update_partition(NULL);
-        HTTPUpdate httpUpdate;
-        
-        httpUpdate.onStart([](){ Serial.println("Update started..."); });
-        httpUpdate.onEnd([](){ Serial.println("Update finished!"); });
-        httpUpdate.onProgress([](int cur, int total) { Serial.printf("Update progress: %d/%d\n", cur, total); });
-        httpUpdate.onError([](int err) { Serial.printf("Update error: %d\n", err); });
+      String firmwareURL = "https://github.com/" + String(YOUR_GITHUB_USERNAME) + "/" + String(YOUR_REPO_NAME) + "/releases/download/" + latestTag + "/SendToGrafana.ino.bin";
+      Serial.println("Firmware URL: " + firmwareURL);
 
-        String firmwareURL = "https://github.com/" + String(YOUR_GITHUB_USERNAME) + "/" + String(YOUR_REPO_NAME) + "/releases/download/" + latestTag + "/firmware.bin";
+      // Create the HTTP client to follow redirects
+      HTTPClient redirectHttp;
+      redirectHttp.begin(clientSecure, firmwareURL);  // Start the initial request
+
+      // Enable strict redirect following
+      //redirectHttp.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+      
+      const char *headerKeys[] = {"Location"};
+      const size_t headerKeysCount = sizeof(headerKeys) / sizeof(headerKeys[0]);
+      redirectHttp.collectHeaders(headerKeys, headerKeysCount);
+
+      int redirectCode = redirectHttp.GET();  // Perform GET request
+      if (redirectCode == HTTP_CODE_FOUND || redirectCode == HTTP_CODE_MOVED_PERMANENTLY) {
+        Serial.println("Redirect found, HTTP code: " + String(redirectCode));        
+        Serial.println(redirectHttp.getString());
+        Serial.println(redirectHttp.headers());
+        Serial.println(redirectHttp.header("Location"));
+        // Now HTTPClient automatically handles redirection
+        String redirectedURL = redirectHttp.header("Location");
+        if (redirectedURL.length() > 0) {
+          Serial.println("Redirected to: " + redirectedURL);
+          firmwareURL = redirectedURL;  // Update firmware URL to the redirected one
+        } else {
+          Serial.println("No 'Location' header found in redirect response.");
+        }
+
+        // Always end the HTTP connection
+        redirectHttp.end();
+
+        // Proceed to update using the final URL
         t_httpUpdate_return ret = httpUpdate.update(clientSecure, firmwareURL);
 
         if (ret == HTTP_UPDATE_OK) {
@@ -100,43 +120,33 @@ void checkForUpdates() {
         } else {
           Serial.printf("Update failed: %d\n", httpUpdate.getLastError());
         }
+
       } else {
-        Serial.println("Firmware is up to date.");
+        Serial.printf("Error following redirect. HTTP code: %d\n", redirectCode);
+        redirectHttp.end();
       }
     } else {
-      Serial.printf("Update check failed: HTTP error %d\n", httpCode);
+      Serial.println("Firmware is up to date.");
     }
+  } else {
+    Serial.println("Unable to check for updates... empty release tag.");
   }
-  http.end();
 }
 
-void loop() {
-  checkForUpdates();
 
-  float temperature = 99, humidity = 100, co2 = 999999;
 
-  if (scd30.dataReady()) {
-    if (!scd30.read()) {
-      Serial.println("Error leyendo el sensor!");
-      return;
-    }
-    temperature = scd30.temperature;
-    humidity = scd30.relative_humidity;
-    co2 = scd30.CO2;
-  }
 
-  Serial.printf("Free heap before sending: %d bytes\n", ESP.getFreeHeap());
-  send_data_grafana(temperature, humidity, co2);
-  Serial.printf("Free heap after sending: %d bytes\n", ESP.getFreeHeap());
 
-  delay(10000);
-}
 
 String create_grafana_message(float temperature, float humidity, float co2) {
-  char buffer[150];
   unsigned long long timestamp = time(nullptr) * 1000000000ULL;
-  snprintf(buffer, sizeof(buffer), "mediciones,device=%s temp=%.2f,hum=%.2f,co2=%.2f %llu", INICIALES, temperature, humidity, co2, timestamp);
-  return String(buffer);
+  String message = "mediciones,device=" + String(INICIALES) + 
+                   " temp=" + String(temperature, 2) +
+                   ",hum=" + String(humidity, 2) + 
+                   ",co2=" + String(co2) + 
+                   " " + String(timestamp);
+
+  return message;
 }
 
 void send_data_grafana(float temperature, float humidity, float co2) {
@@ -161,4 +171,30 @@ void send_data_grafana(float temperature, float humidity, float co2) {
   } else {
     Serial.println("Error en la conexión WiFi");
   }
+}
+
+
+
+void loop() {
+  Serial.printf("Free heap before checking: %d bytes\n", ESP.getFreeHeap());
+  checkForUpdates();
+  Serial.printf("Free heap after checking: %d bytes\n", ESP.getFreeHeap());
+
+  float temperature = 99, humidity = 100, co2 = 999999;
+
+  if (scd30.dataReady()) {
+    if (!scd30.read()) {
+      Serial.println("Error leyendo el sensor!");
+      return;
+    }
+    temperature = scd30.temperature;
+    humidity = scd30.relative_humidity;
+    co2 = scd30.CO2;
+  }
+
+  Serial.printf("Free heap before sending: %d bytes\n", ESP.getFreeHeap());
+  send_data_grafana(temperature, humidity, co2);
+  Serial.printf("Free heap after sending: %d bytes\n", ESP.getFreeHeap());
+
+  delay(10000);
 }
