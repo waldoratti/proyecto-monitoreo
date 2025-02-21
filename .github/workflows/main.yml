@@ -45,8 +45,8 @@ jobs:
       id: get_version  
       run: |
         VERSION=$(sed -n 's/#define FIRMWARE_VERSION "\([^"]*\)"/\1/p' src/embedded/test/SendToGrafana/version.h)
-        echo "::set-output name=version::$VERSION" # Set output for the step
-
+        echo "version=$VERSION" >> $GITHUB_ENV
+   
     - name: Create Release
       uses: ncipollo/release-action@v1
       with:
