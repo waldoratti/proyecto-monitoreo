@@ -14,10 +14,14 @@ const char* token_grafana = "token:e98697797a6a592e6c886277041e6b95";
 const char* FIRMWARE_BIN_URL = "http://192.168.0.106:8080/bins/SendToGrafana.ino.bin";
 const char* YOUR_GITHUB_USERNAME = "AlterMundi-MonitoreoyControl";
 const char* YOUR_REPO_NAME = "proyecto-monitoreo";
+const unsigned long UPDATE_INTERVAL = 300000; // Check updates every 5 minutes
 
 Adafruit_SCD30 scd30;
 WiFiManager wifiManager; 
 WiFiClientSecure clientSecure;  
+WiFiClient client;
+HTTPClient http;
+
 void setup() {
   Serial.begin(115200);
   wifiManager.autoConnect("ESP32-AP"); 
@@ -30,16 +34,15 @@ void setup() {
   }
 
   clientSecure.setInsecure(); 
-}
+  }
 
 String getLatestReleaseTag(const char* repoOwner, const char* repoName) {
-  HTTPClient http;
+ 
   String apiUrl = "https://api.github.com/repos/" + String(repoOwner) + "/" + String(repoName) + "/releases/latest";
   Serial.println("API URL: " + apiUrl);
 
   if (http.begin(clientSecure, apiUrl)) {
     int httpCode = http.GET();
-    
     if (httpCode == HTTP_CODE_OK) {
       String payload = http.getString();
       http.end();  
@@ -59,10 +62,11 @@ String getLatestReleaseTag(const char* repoOwner, const char* repoName) {
       Serial.printf("HTTP GET failed, error: %d\n", httpCode);
     }
 
-    http.end();  
+    
   } else {
     Serial.println("Unable to connect to GitHub API.");
   }
+  http.end();  
   return "";
 }
 void checkForUpdates() {
@@ -72,13 +76,7 @@ void checkForUpdates() {
   if (latestTag != "") {
     if (latestTag != FIRMWARE_VERSION) {
       const esp_partition_t* update_partition = esp_ota_get_next_update_partition(NULL);
-      HTTPUpdate httpUpdate;
-
-      httpUpdate.onStart([](){ Serial.println("Update started..."); });
-      httpUpdate.onEnd([](){ Serial.println("Update finished!"); });
-      httpUpdate.onProgress([](int cur, int total) { Serial.printf("Update progress: %d/%d\n", cur, total); });
-      httpUpdate.onError([](int err) { Serial.printf("Update error: %d\n", err); });
-
+      
       String firmwareURL = "https://github.com/" + String(YOUR_GITHUB_USERNAME) + "/" + String(YOUR_REPO_NAME) + "/releases/download/" + latestTag + "/SendToGrafana.ino.bin";
       Serial.println("Firmware URL: " + firmwareURL);
 
@@ -104,11 +102,14 @@ void checkForUpdates() {
         } else {
           Serial.println("No 'Location' header found in redirect response.");
         }
-
-        // Always end the HTTP connection
-        redirectHttp.end();
-
         // Proceed to update using the final URL
+        HTTPUpdate httpUpdate;
+
+        httpUpdate.onStart([](){ Serial.println("Update started..."); });
+        httpUpdate.onEnd([](){ Serial.println("Update finished!"); });
+        httpUpdate.onProgress([](int cur, int total) { Serial.printf("Update progress: %d/%d\n", cur, total); });
+        httpUpdate.onError([](int err) { Serial.printf("Update error: %d\n", err); });
+
         t_httpUpdate_return ret = httpUpdate.update(clientSecure, firmwareURL);
 
         if (ret == HTTP_UPDATE_OK) {
@@ -120,8 +121,9 @@ void checkForUpdates() {
 
       } else {
         Serial.printf("Error following redirect. HTTP code: %d\n", redirectCode);
-        redirectHttp.end();
       }
+      // Always end the HTTP connection
+      redirectHttp.end();
     } else {
       Serial.println("Firmware is up to date.");
     }
@@ -129,11 +131,6 @@ void checkForUpdates() {
     Serial.println("Unable to check for updates... empty release tag.");
   }
 }
-
-
-
-
-
 
 String create_grafana_message(float temperature, float humidity, float co2) {
   unsigned long long timestamp = time(nullptr) * 1000000000ULL;
@@ -148,13 +145,11 @@ String create_grafana_message(float temperature, float humidity, float co2) {
 
 void send_data_grafana(float temperature, float humidity, float co2) {
   if (WiFi.status() == WL_CONNECTED) {
-    HTTPClient http;
-    WiFiClient client;
-    String data = create_grafana_message(temperature, humidity, co2);
+  http.begin(client, url);
+  http.addHeader("Content-Type", "text/plain");
+  http.addHeader("Authorization", "Basic " + String(token_grafana));
+  String data = create_grafana_message(temperature, humidity, co2);
 
-    http.begin(client, url);
-    http.addHeader("Content-Type", "text/plain");
-    http.addHeader("Authorization", "Basic " + String(token_grafana));
 
     int httpResponseCode = http.POST(data);
 
@@ -170,12 +165,17 @@ void send_data_grafana(float temperature, float humidity, float co2) {
   }
 }
 
-
-
 void loop() {
-  Serial.printf("Free heap before checking: %d bytes\n", ESP.getFreeHeap());
-  checkForUpdates();
-  Serial.printf("Free heap after checking: %d bytes\n", ESP.getFreeHeap());
+
+  // Check for updates periodically instead of every loop
+  unsigned long lastUpdateCheck = 0,currentMillis = millis();
+  if (currentMillis - lastUpdateCheck >= UPDATE_INTERVAL) {
+    Serial.printf("Free heap before checking: %d bytes\n", ESP.getFreeHeap());
+    checkForUpdates();
+    Serial.printf("Free heap after checking: %d bytes\n", ESP.getFreeHeap());
+    lastUpdateCheck = currentMillis;
+  }
+
 
   float temperature = 99, humidity = 100, co2 = 999999;
 
