@@ -134,7 +134,7 @@ void checkForUpdates() {
 
 String create_grafana_message(float temperature, float humidity, float co2) {
   unsigned long long timestamp = time(nullptr) * 1000000000ULL;
-  String message = "mediciones,device=" + String(INICIALES) + 
+  String message = "medicionesCO2,device=" + String(INICIALES) + 
                    " temp=" + String(temperature, 2) +
                    ",hum=" + String(humidity, 2) + 
                    ",co2=" + String(co2) + 
